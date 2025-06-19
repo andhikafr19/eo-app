@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 
+// Force TypeScript to recognize new schema
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }

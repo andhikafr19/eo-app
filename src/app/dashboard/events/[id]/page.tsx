@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Calendar, MapPin, Users, Clock, Edit, Trash2 } from 'lucide-react'
+import { ArrowLeft, Calendar, MapPin, Users, Clock, Edit, Trash2, UserPlus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { RegistrationForm } from '@/components/forms/registration-form'
 
 interface Event {
   id: string
@@ -28,6 +29,14 @@ interface Event {
   }
 }
 
+interface Registration {
+  id: string
+  status: string
+  category: string
+  createdAt: string
+  userId: string
+}
+
 export default function EventDetailPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -35,8 +44,10 @@ export default function EventDetailPage() {
   const eventId = params.id as string
   
   const [event, setEvent] = useState<Event | null>(null)
+  const [userRegistration, setUserRegistration] = useState<Registration | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+  const [showRegistrationForm, setShowRegistrationForm] = useState(false)
 
   // Check if user can edit events
   const userRole = session?.user?.role
@@ -48,23 +59,33 @@ export default function EventDetailPage() {
       router.push('/auth/signin')
     }
   }, [status, router])
-
-  // Fetch event details
+  // Fetch event details and user registration
   useEffect(() => {
-    const fetchEvent = async () => {
+    const fetchData = async () => {
       if (!eventId) return
       
       try {
         setLoading(true)
-        const response = await fetch(`/api/events/${eventId}`)
-        if (response.ok) {
-          const eventData = await response.json()
+        
+        // Fetch event details
+        const eventResponse = await fetch(`/api/events/${eventId}`)
+        if (eventResponse.ok) {
+          const eventData = await eventResponse.json()
           setEvent(eventData)
-        } else if (response.status === 404) {
+        } else if (eventResponse.status === 404) {
           router.push('/dashboard')
+          return
+        }
+
+        // Fetch user registration for this event
+        const registrationResponse = await fetch(`/api/registrations?eventId=${eventId}`)
+        if (registrationResponse.ok) {
+          const registrations = await registrationResponse.json()
+          const userReg = registrations.find((reg: Registration) => reg.userId === session?.user?.id)
+          setUserRegistration(userReg || null)
         }
       } catch (error) {
-        console.error('Error fetching event:', error)
+        console.error('Error fetching data:', error)
         router.push('/dashboard')
       } finally {
         setLoading(false)
@@ -72,9 +93,9 @@ export default function EventDetailPage() {
     }
 
     if (status === 'authenticated') {
-      fetchEvent()
+      fetchData()
     }
-  }, [eventId, status, router])
+  }, [eventId, status, router, session?.user?.id])
 
   // Handle delete event
   const handleDeleteEvent = async () => {
@@ -122,6 +143,46 @@ export default function EventDetailPage() {
         return 'bg-blue-100 text-blue-800'
       default:
         return 'bg-red-100 text-red-800'
+    }  }
+
+  // Handle registration form success
+  const handleRegistrationSuccess = async () => {
+    setShowRegistrationForm(false)
+    // Refresh data to get updated registration
+    const registrationResponse = await fetch(`/api/registrations?eventId=${eventId}`)
+    if (registrationResponse.ok) {
+      const registrations = await registrationResponse.json()
+      const userReg = registrations.find((reg: Registration) => reg.userId === session?.user?.id)
+      setUserRegistration(userReg || null)
+    }
+  }
+
+  // Handle cancel registration
+  const handleCancelRegistration = async () => {
+    if (!userRegistration) return
+
+    if (!confirm('Are you sure you want to cancel your registration?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/registrations/${userRegistration.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: 'CANCELLED' })
+      })
+      
+      if (response.ok) {
+        setUserRegistration(null)
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Failed to cancel registration')
+      }
+    } catch (error) {
+      console.error('Error cancelling registration:', error)
+      alert('Failed to cancel registration')
     }
   }
 
@@ -248,6 +309,69 @@ export default function EventDetailPage() {
                 </div>
               </div>
             </div>
+          </div>          {/* Registration Section */}
+          <div className="p-8 border-t">
+            <h3 className="font-medium text-gray-900 mb-4">Registration</h3>
+            
+            {showRegistrationForm ? (
+              <RegistrationForm 
+                eventId={event.id}
+                eventName={event.name}
+                onSuccess={handleRegistrationSuccess}
+                onCancel={() => setShowRegistrationForm(false)}
+              />
+            ) : userRegistration ? (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <UserPlus className="h-5 w-5 text-green-600 mr-2" />
+                    <div>
+                      <p className="text-green-800 font-medium">You are registered for this event</p>
+                      <p className="text-green-600 text-sm">
+                        Status: {userRegistration.status} • Category: {userRegistration.category}
+                      </p>
+                    </div>
+                  </div>
+                  {userRegistration.status !== 'CANCELLED' && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={handleCancelRegistration}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      Cancel Registration
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : event.status === 'PUBLISHED' ? (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-blue-800 font-medium">Registration Open</p>
+                      <p className="text-blue-600 text-sm">
+                        {event.maxCapacity 
+                          ? `${event._count.registrations}/${event.maxCapacity} spots filled`
+                          : `${event._count.registrations} registered`
+                        }
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={() => setShowRegistrationForm(true)}
+                      disabled={event.maxCapacity ? event._count.registrations >= event.maxCapacity : false}
+                    >
+                      <UserPlus className="h-5 w-5 mr-2" />
+                      Register Now
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-gray-600">Registration is not available for this event.</p>
+              </div>
+            )}
           </div>
         </div>
       </main>

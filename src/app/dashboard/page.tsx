@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Search, Calendar, Users, MapPin, Edit, Trash2, LogOut } from 'lucide-react'
+import { Plus, Search, Calendar, Users, MapPin, Edit, Trash2, LogOut, UserCheck } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -180,6 +180,13 @@ export default function DashboardPage() {
                 <p className="text-xs text-gray-500">{session?.user?.email}</p>
               </div>              {/* Action buttons */}
               <div className="flex items-center gap-2">
+                <Link href="/dashboard/registrations">
+                  <Button variant="ghost">
+                    <UserCheck className="h-4 w-4 mr-2" />
+                    My Registrations
+                  </Button>
+                </Link>
+                
                 {canCreateEvents && (
                   <Link href="/dashboard/events/create">
                     <Button>

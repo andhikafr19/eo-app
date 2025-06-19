@@ -1,0 +1,186 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth.js Models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  events        Event[]
+  registrations Registration[]
+
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Application Models
+model Event {
+  id          String      @id @default(cuid())
+  name        String
+  description String?     @db.Text
+  startDate   DateTime
+  endDate     DateTime
+  location    String
+  maxCapacity Int?
+  status      EventStatus @default(DRAFT)
+  createdById String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  createdBy     User            @relation(fields: [createdById], references: [id])
+  registrations Registration[]
+  sessions      Session_Event[]
+
+  @@map("events")
+}
+
+model Registration {
+  id           String              @id @default(cuid())
+  eventId      String
+  userId       String
+  status       RegistrationStatus  @default(PENDING)
+  category     ParticipantCategory @default(PUBLIC)
+  customFields Json?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attendances Attendance[]
+  ticket      Ticket?
+
+  @@unique([eventId, userId])
+  @@map("registrations")
+}
+
+model Session_Event {
+  id        String   @id @default(cuid())
+  eventId   String
+  name      String
+  startTime DateTime
+  endTime   DateTime
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  attendances Attendance[]
+
+  @@map("sessions")
+}
+
+model Attendance {
+  id             String        @id @default(cuid())
+  registrationId String
+  sessionId      String?
+  checkInTime    DateTime?
+  checkOutTime   DateTime?
+  method         CheckInMethod @default(MANUAL)
+  createdAt      DateTime      @default(now())
+
+  registration Registration   @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  session      Session_Event? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@map("attendances")
+}
+
+model Ticket {
+  id             String    @id @default(cuid())
+  registrationId String    @unique
+  ticketNumber   String    @unique
+  qrCode         String    @db.Text
+  qrCodeData     String    @db.Text
+  isUsed         Boolean   @default(false)
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  registration Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  @@map("tickets")
+}
+
+// Enums
+enum UserRole {
+  USER
+  ADMIN
+  EVENT_ORGANIZER
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  WAITLIST
+}
+
+enum ParticipantCategory {
+  INTERNAL
+  PUBLIC
+  VIP
+}
+
+enum CheckInMethod {
+  QR_CODE
+  MANUAL
+}
