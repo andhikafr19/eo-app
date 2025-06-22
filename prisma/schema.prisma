@@ -49,10 +49,11 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  events        Event[]
-  registrations Registration[]
+  accounts           Account[]
+  sessions           Session[]
+  events             Event[]
+  registrations      Registration[]
+  scannedAttendances Attendance[]
 
   @@map("users")
 }
@@ -128,10 +129,20 @@ model Attendance {
   checkInTime    DateTime?
   checkOutTime   DateTime?
   method         CheckInMethod @default(MANUAL)
+  
+  // Enhanced fields for FASE 5
+  checkInLocation  String?      // Location where check-in happened
+  checkOutLocation String?      // Location where check-out happened
+  deviceInfo       String?      // Device/scanner info
+  scannerUserId    String?      // Who performed the scan
+  notes           String?       // Additional notes
+  
   createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   registration Registration   @relation(fields: [registrationId], references: [id], onDelete: Cascade)
   session      Session_Event? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  scannerUser  User?          @relation(fields: [scannerUserId], references: [id], onDelete: SetNull)
 
   @@map("attendances")
 }
